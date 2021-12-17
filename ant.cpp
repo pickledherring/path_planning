@@ -3,8 +3,8 @@ inspired by:
 https://www.frontiersin.org/articles/10.3389/fnbot.2019.00015/full
 and
 https://openreview.net/forum?id=HyZ1CJZ_-r
-
 */
+
 #include <random>
 #include <iostream>
 #include <algorithm>
@@ -19,6 +19,7 @@ Step 1: set up grid, start, target, and taboo.
 build square grid, randomly place high weights
 start and target are in the middle of the leftmost and rightmost columns.
 */
+
 const int GRID_DIM = 16; // size of GRID_DIM x GRID_DIM grid
 const float OBST_CHANCE = 4; // chance a square will have a penalty added out of 10
 random_device dev;
@@ -193,7 +194,7 @@ int* retract(vector<int*> &path) {
 Step 3: Place the ant k (k = 1, 2, ⋯ , m) on start. Proceed to have them randomly search
 for the target, and return a path.
 */
-vector<int*> release_ant(int ant) {
+vector<int*> release_ant() {
     bool taboo[GRID_DIM][GRID_DIM] = {{false}};
     taboo[start[0]][start[1]] = true;
     vector<int*> path;
@@ -222,7 +223,6 @@ vector<int*> release_ant(int ant) {
         memcpy(pos, move_pos, 2 * sizeof(int));
     }
 
-    // sem_post(sem_main);
     // for (int i = 0; i < GRID_DIM; i++) {
     //     for (int j = 0; j < GRID_DIM; j++) {
     //         if (taboo[i][j]) 
@@ -241,20 +241,24 @@ Step 7: Update pheromone. pheromone update occurs by (1 - evap)ph_ij + q / len_k
 where 0 < evap < 1 and q is a constant, and len_k is the cost of the path ant k traveled.
 Only update nodes along the path.
 */
-void pher_update(vector<int*> const &path) {
+int pher_update(vector<int*> const &path) {
     int path_len = 0;
-    for (int* v : path) {
+    for (int* v : path) 
         path_len += grid[v[0]][v[1]];
-    }
+    
     float pheromone = Q / path_len;
-    for (int* v : path) {
-        pher[v[0]][v[1]] *= (1 - evap);
-        pher[v[0]][v[1]] += pheromone;
-    }
-    cout<<"path len "<<path_len<<"\tpheromone "<<pheromone<<endl;
-    // grid_print(2);
-}
 
+    for (int i = 0; i < GRID_DIM; i++) {
+        for (int j = 0; j < GRID_DIM; j++)
+            pher[i][j] *= (1 - evap);
+    }
+
+    for (int* v : path)
+        pher[v[0]][v[1]] += pheromone;
+    
+    // grid_print(2);
+    return path_len;
+}
 
 int main(int argc, char** argv) {
     penalty_add();
@@ -263,15 +267,26 @@ int main(int argc, char** argv) {
     for (auto &arr : pher)
         fill(begin(arr), end(arr), 0.1);
     
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
+    
     for (int i = 0; i < epochs; i++) {
-        vector<int*> path = release_ant(0);
-
+        vector<vector<int*>> paths;
+        for (int j = 0; j < n_ants; j++) {    
+            paths.push_back(release_ant());
+        }
         /*
         After each iteration, if the number of iterations satisfies inequality N ≤ Nmax,
         update the pheromone grid and determine whether it meets the convergence conditions.
         If the number of iterations satisfies inequality N > Nmax, stop.
         */
-        pher_update(path);
+        float avg_path_len = 0;
+        for (int j = 0; j < n_ants; j++) {
+            int path_len = pher_update(paths[j]);
+            avg_path_len += path_len;
+        }
+        avg_path_len /= n_ants;
+        cout<<"avg path len "<<avg_path_len<<endl;
     }
     // print path
     // for (int i = 0; i < path.size(); i++) {

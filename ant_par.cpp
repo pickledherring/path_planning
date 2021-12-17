@@ -29,7 +29,7 @@ int target[2] = {GRID_DIM / 2, GRID_DIM - 1};
 int grid[GRID_DIM][GRID_DIM] = {{0}};
 float pher[GRID_DIM][GRID_DIM] = {{.1}};
 
-sem_t * sem_main;
+// sem_t * sem_main;
 
 const float alpha = 1.0;
 const float beta_v = 1.5;
@@ -37,6 +37,11 @@ const float evap = .25;
 const float Q = 100.0;
 int n_ants = 10;
 int epochs = 10;
+
+struct arguments{
+    vector<int*> path;
+    int ant;
+};
 
 void penalty_add() {
     int penalty_size = 8; // about half the grid width should be enough
@@ -193,13 +198,20 @@ int* retract(vector<int*> &path) {
 Step 3: Place the ant k (k = 1, 2, ⋯ , m) on start. Proceed to have them randomly search
 for the target, and return a path.
 */
-void * release_ant(void* args) {
-    struct arguments* path_and_ant = (struct arguments *) args;
+void*  release_ant(void* args) {
+    // cout<<"made it to 202"<<endl;
     bool taboo[GRID_DIM][GRID_DIM] = {{false}};
     taboo[start[0]][start[1]] = true;
-    vector<vector<int*>> paths = *path_and_ant->paths;
-    int ant = path_and_ant->ant;
-    paths[ant].push_back(start);
+
+    arguments* p_n_a = (arguments*) args;
+    // vector<int*> path = path_and_ant->path;
+    int ant = p_n_a->ant;
+
+    // cout<<"made it to 208. ant "<<ant<<endl;
+    // if (ant == 9) 
+        // cout<<"all ants made it to 210 probably"<<endl;
+
+    p_n_a->path.push_back(start);
     int pos[2];
     memcpy(pos, start, 2 * sizeof(int));
     uniform_real_distribution<> prob(0, 1.0);
@@ -209,7 +221,7 @@ void * release_ant(void* args) {
         int* move_pos = choose_square(pos, rand_selector, taboo);
         // cout<<"chose "<<move_pos[0]<<", "<<move_pos[1]<<endl;
         taboo[move_pos[0]][move_pos[1]] = true;
-        paths[ant].push_back(move_pos);
+        p_n_a->path.push_back(move_pos);
         while (deadlock(move_pos, taboo) /* && deadlock_count < 50*/) {
             // cout<<"deadlock at "<<move_pos[0]<<", "<<move_pos[1]<<endl;
             // cout<<"path ";
@@ -218,12 +230,17 @@ void * release_ant(void* args) {
             // }
             // cout<<endl;
             taboo[move_pos[0]][move_pos[1]] = true;
-            move_pos = retract(paths[ant]);
+            move_pos = retract(p_n_a->path);
             // deadlock_count++;
         }
         memcpy(pos, move_pos, 2 * sizeof(int));
     }
 
+    // print path
+    // for (int i = 0; i < path.size(); i++) {
+    //     cout<<i<<":  "<<path[i][0]<<", "<<path[i][1]<<"\t    ";
+    // }
+    // cout<<endl;
     // for (int i = 0; i < GRID_DIM; i++) {
     //     for (int j = 0; j < GRID_DIM; j++) {
     //         if (taboo[i][j]) 
@@ -233,7 +250,12 @@ void * release_ant(void* args) {
     //     }
     //     cout<<endl;
     // }
-    sem_post(sem_main);
+    // if (ant == 9) 
+    //     cout<<"all ants made it to 247 probably"<<endl;
+    // sem_post(sem_main);
+    
+    pthread_exit(NULL);
+    // return (void*)0;
 }
 
 /*
@@ -241,7 +263,7 @@ Step 7: Update pheromone. pheromone update occurs by (1 - evap)ph_ij + q / len_k
 where 0 < evap < 1 and q is a constant, and len_k is the cost of the path ant k traveled.
 Only update nodes along the path.
 */
-void pher_update(vector<int*> const &path) {
+int pher_update(vector<int*> const &path) {
     int path_len = 0;
     for (int* v : path) {
         path_len += grid[v[0]][v[1]];
@@ -251,14 +273,9 @@ void pher_update(vector<int*> const &path) {
         pher[v[0]][v[1]] *= (1 - evap);
         pher[v[0]][v[1]] += pheromone;
     }
-    cout<<"path len "<<path_len<<"\tpheromone "<<pheromone<<endl;
     // grid_print(2);
+    return path_len;
 }
-
-struct arguments{
-    vector<vector<int*>>* paths;
-    int ant;
-};
 
 int main(int argc, char** argv) {
     penalty_add();
@@ -267,43 +284,56 @@ int main(int argc, char** argv) {
     for (auto &arr : pher)
         fill(begin(arr), end(arr), 0.1);
     
-    struct timespec start, end;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &start);
-    pthread_t *threads;
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
+    pthread_t* threads;
     threads = (pthread_t*)malloc(n_ants * sizeof(pthread_t));
-    
-    for (int i = 0; i < epochs; i++) {
-        sem_open("/sem_main", NULL, NULL, n_ants);
-        vector<vector<int*>> paths;
-        struct arguments args[n_ants];
-        for (int j = 0; j < n_ants; j++) {
-            args[j].paths = &paths;
-            args[j].ant = j;
-            pthread_create(&threads[j], NULL, release_ant, (void *) &args[j]);  
-        }
 
-        sem_wait(sem_main);
-        pthread_t main_thread = pthread_self();
+    for (int i = 0; i < epochs; i++) {
+        vector<vector<int*>> paths;
+        arguments args[n_ants];
+        for (int j = 0; j < n_ants; j++) {
+            // vector<int*> path;
+            // path.reserve(GRID_DIM * GRID_DIM);
+
+            args[j].ant = j;
+            // args[j].path = path;
+
+            // cout<<"made it to 285. paths size is "<<paths.size()<<endl;
+
+            pthread_create(&threads[j], NULL, release_ant, (void*)&(args[j]));
+            pthread_join(threads[j], NULL);
+        }
+        // for (int j = 0; j < n_ants; j++) {
+        //     for (int k = 0; k < args[j].path.size(); k++) {
+        //         cout<<j<<":  "<<args[j].path[k][0]<<", "<<args[j].path[k][1]<<"\t    ";
+        //     }
+        //     cout<<endl;
+        // }
+        
+        float avg_path_len = 0;
+        for (int j = 0; j < n_ants; j++) {
+            int path_len = pher_update(args[j].path);
+            avg_path_len += path_len;
+        }
+        avg_path_len /= n_ants;
+        // cout<<"paths size is "<<paths.size()<<endl;
+        cout<<"avg path len "<<avg_path_len<<endl;
+    }
+
         /*
         After each iteration, if the number of iterations satisfies inequality N ≤ Nmax,
         update the pheromone grid and determine whether it meets the convergence conditions.
         If the number of iterations satisfies inequality N > Nmax, stop.
         */
-        if (pthread_equal(threads[0], main_thread)) {
-            for (int j = 0; j < n_ants; j++) {
-                pher_update(paths[j]);
-            }
-        }
-    }
-    for (int i = 0; i < n_ants; i++)
-        pthread_join(threads[i], NULL);
-
+        
     free(threads);
-    clock_gettime(CLOCK_MONOTONIC_RAW, &end);
-    uint64_t diff = (1000000000L * (end.tv_sec - start.tv_sec) + end.tv_nsec - start.tv_nsec) / 1e6;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+    uint64_t diff = (1000000000L * (end_time.tv_sec - start_time.tv_sec) +
+        end_time.tv_nsec - start_time.tv_nsec) / 1e6;
     // print path
-    // for (int i = 0; i < path.size(); i++) {
-    //     cout<<i<<":  "<<path[i][0]<<", "<<path[i][1]<<"\t    ";
+    // for (int i = 0; i < paths[0].size(); i++) {
+    //     cout<<i<<":  "<<paths[0][i][0]<<", "<<paths[0][i][1]<<"\t    ";
     // }
     // cout<<endl;
     return 0;
