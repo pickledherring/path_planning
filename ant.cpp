@@ -30,8 +30,6 @@ int target[2] = {GRID_DIM / 2, GRID_DIM - 1};
 int grid[GRID_DIM][GRID_DIM] = {{0}};
 float pher[GRID_DIM][GRID_DIM] = {{.1}};
 
-// sem_t * sem_main;
-
 const float alpha = 1.0;
 const float beta_v = 1.5;
 const float evap = .25;
@@ -43,14 +41,12 @@ void penalty_add() {
     int penalty_size = 8; // about half the grid width should be enough
     uniform_real_distribution<> penalty(0, 10.0);
 
-    for (int i = 0; i < GRID_DIM; i++) {
+    for (int i = 0; i < GRID_DIM; i++)
         for (int j = 0; j < GRID_DIM; j++) {
             float pen_chance = penalty(rng);
-            if (pen_chance < OBST_CHANCE) {
+            if (pen_chance < OBST_CHANCE)
                 grid[i][j] = grid[i][j] + penalty_size;
-            }
         }
-    }
 }
 
 // choice == 0 for grid, 1 for pher, 2 for pher/grid
@@ -110,50 +106,42 @@ int* choose_square(int* pos, float rand_selector, bool taboo[][GRID_DIM]) {
         for (int j = -1; j < 2; j++) {
             int x = pos[0] + i;
             int y = pos[1] + j;
+
             if (x == target[0] && y == target[1]) {
                 int* new_pos = new int[2];
                 new_pos[0] = x;
                 new_pos[1] = y;
                 return new_pos;
             }
+
             else if ((i == 0 && j == 0) || x < 0 || y < 0 || x >= GRID_DIM || y >= GRID_DIM ||
             taboo[x][y])
                 continue;
+
             else {
                 adj_pos.push_back({x, y});
                 float dist = sqrt(i * i + j * j);
                 float numer = pow(pher[x][y], alpha) * pow(1 / dist, beta_v);
                 numer_vec.push_back(numer);
                 total += numer;
-                // cout<<"x and y: "<<x<<", "<<y<<"\t";
-                // cout<<"numer: "<<numer<<"\t";
-                // cout<<"cumul: "<<total<<endl;
             }
         }
     }
-    // for (int i = 0; i < numer_vec.size(); i++)
-    //     cout<<numer_vec[i]<<"\t";
-    // cout<<endl<<total<<endl;
-    // cout<<"elements: "<<endl;
+
     int* new_pos = new int[2];
     float cumulative = 0;
+
     for (int i = 0; i < numer_vec.size(); i++) {
         float frac = numer_vec[i] / total;
         numer_vec[i] = cumulative + frac;
         if (rand_selector <= numer_vec[i]) {
-            // cout<<rand_selector<<" <= "<<numer_vec[i]<<"?\t"<<(rand_selector <= numer_vec[i])<<endl;
             new_pos[0] = adj_pos[i][0];
             new_pos[1] = adj_pos[i][1];
             break;
         }
         cumulative += frac;
     }
-    // cout<<"new_pos: "<<new_pos[0]<<", "<<new_pos[1]<<endl;
-    // cout<<"cumulative: "<<cumulative<<endl;
 
-    // int* new_pos = new int[2];
-    // new_pos[0] = pos[0];
-    // new_pos[1] = pos[1] + 1;
     return new_pos;
 }
 
@@ -166,9 +154,9 @@ bool deadlock(int* pos, bool taboo[][GRID_DIM]) {
         for (int j = -1; j < 2; j++) {
             int x = pos[0] + i;
             int y = pos[1] + j;
-            if (x >= 0 && y >= 0 && x < GRID_DIM && y < GRID_DIM && !taboo[x][y]) {
+
+            if (x >= 0 && y >= 0 && x < GRID_DIM && y < GRID_DIM && !taboo[x][y])
                 return false;
-            }
             else
                 continue;
         }
@@ -179,59 +167,38 @@ bool deadlock(int* pos, bool taboo[][GRID_DIM]) {
 int* retract(vector<int*> &path) {
     int* new_pos = new int[2];
     path.pop_back();
-    // cout<<"path ";
-    // for (int i = 0; i < path.size(); i++) {
-    //     cout<<i<<":  "<<path[i][0]<<", "<<path[i][1]<<"\t    ";
-    // }
-    // cout<<endl;
     new_pos[0] = path.back()[0];
     new_pos[1] = path.back()[1];
-    // cout<<"retract to "<<new_pos[0]<<", "<<new_pos[1]<<endl;
     return new_pos;
 }
 
 /*
 Step 3: Place the ant k (k = 1, 2, ⋯ , m) on start. Proceed to have them randomly search
-for the target, and return a path.
+for the target and create a path.
 */
 vector<int*> release_ant() {
     bool taboo[GRID_DIM][GRID_DIM] = {{false}};
     taboo[start[0]][start[1]] = true;
     vector<int*> path;
     path.push_back(start);
+
     int pos[2];
     memcpy(pos, start, 2 * sizeof(int));
+
     uniform_real_distribution<> prob(0, 1.0);
-    // int deadlock_count = 0;
-    while (pos[0] != target[0] || pos[1] != target[1] /* && deadlock_count < 50*/) {
+
+    while (pos[0] != target[0] || pos[1] != target[1]) {
         float rand_selector = prob(rng);
         int* move_pos = choose_square(pos, rand_selector, taboo);
-        // cout<<"chose "<<move_pos[0]<<", "<<move_pos[1]<<endl;
         taboo[move_pos[0]][move_pos[1]] = true;
         path.push_back(move_pos);
-        while (deadlock(move_pos, taboo) /* && deadlock_count < 50*/) {
-            // cout<<"deadlock at "<<move_pos[0]<<", "<<move_pos[1]<<endl;
-            // cout<<"path ";
-            // for (int i = 0; i < path.size(); i++) {
-            //     cout<<i<<":  "<<path[i][0]<<", "<<path[i][1]<<"\t    ";
-            // }
-            // cout<<endl;
+
+        while (deadlock(move_pos, taboo)) {
             taboo[move_pos[0]][move_pos[1]] = true;
             move_pos = retract(path);
-            // deadlock_count++;
         }
         memcpy(pos, move_pos, 2 * sizeof(int));
     }
-
-    // for (int i = 0; i < GRID_DIM; i++) {
-    //     for (int j = 0; j < GRID_DIM; j++) {
-    //         if (taboo[i][j]) 
-    //             cout<<" T  ";
-    //         else
-    //             cout<<" F  ";
-    //     }
-    //     cout<<endl;
-    // }
 
     return path;
 }
@@ -239,69 +206,69 @@ vector<int*> release_ant() {
 /*
 Step 7: Update pheromone. pheromone update occurs by (1 - evap)ph_ij + q / len_k
 where 0 < evap < 1 and q is a constant, and len_k is the cost of the path ant k traveled.
-Only update nodes along the path.
+Only update nodes along the path with second part.
 */
 int pher_update(vector<int*> const &path) {
+    for (int i = 0; i < GRID_DIM; i++)
+        for (int j = 0; j < GRID_DIM; j++)
+            pher[i][j] *= (1 - evap);
+
     int path_len = 0;
     for (int* v : path) 
         path_len += grid[v[0]][v[1]];
     
     float pheromone = Q / path_len;
 
-    for (int i = 0; i < GRID_DIM; i++) {
-        for (int j = 0; j < GRID_DIM; j++)
-            pher[i][j] *= (1 - evap);
-    }
-
     for (int* v : path)
         pher[v[0]][v[1]] += pheromone;
     
-    // grid_print(2);
     return path_len;
 }
 
 int main(int argc, char** argv) {
     penalty_add();
-    penalty_add();
+    penalty_add(); // done twice for even coverage
     // grid_print();
+
     for (auto &arr : pher)
         fill(begin(arr), end(arr), 0.1);
     
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
-    
+
     for (int i = 0; i < epochs; i++) {
         vector<vector<int*>> paths;
         for (int j = 0; j < n_ants; j++) {    
             paths.push_back(release_ant());
         }
-        /*
-        After each iteration, if the number of iterations satisfies inequality N ≤ Nmax,
-        update the pheromone grid and determine whether it meets the convergence conditions.
-        If the number of iterations satisfies inequality N > Nmax, stop.
-        */
+        // print all paths
+        // for (int i = 0; i < path.size(); i++) {
+        //     cout<<i<<":  "<<path[i][0]<<", "<<path[i][1]<<"\t    ";
+        // }
+        // cout<<endl;
+        
         float avg_path_len = 0;
         for (int j = 0; j < n_ants; j++) {
             int path_len = pher_update(paths[j]);
             avg_path_len += path_len;
         }
         avg_path_len /= n_ants;
-        cout<<"avg path len "<<avg_path_len<<endl;
+        // cout<<"avg path len "<<avg_path_len<<endl;
     }
-    // print path
-    // for (int i = 0; i < path.size(); i++) {
-    //     cout<<i<<":  "<<path[i][0]<<", "<<path[i][1]<<"\t    ";
-    // }
-    // cout<<endl;
 
-    // pthread_t *threads;
-    // threads = (pthread_t*)malloc(n_ants * sizeof(pthread_t));
-    // sem_open("/sem_main", NULL, NULL, n_ants);
-    // for (int ant = 0; ant < n_ants; ants++) {
-    //     pthread_create(&threads[i], NULL, release_ant, ant);
-    //     release_ant(ant);
-    // }
-    // sem_wait(sem_main);
-    // free(threads);
+    /*
+    After each iteration, if the number of iterations satisfies inequality N ≤ Nmax,
+    update the pheromone grid and determine whether it meets the convergence conditions.
+    If the number of iterations satisfies inequality N > Nmax, stop.
+
+    not included here since I want to keep the number of iterations constant
+    */
+
+   clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
+    uint64_t diff = (1000000000L * (end_time.tv_sec - start_time.tv_sec) +
+        end_time.tv_nsec - start_time.tv_nsec) / 1e6;
+
+    cout<<"Finished in "<<diff<<"ms!"<<endl;
+
     return 0;
 }
