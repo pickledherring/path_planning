@@ -3,8 +3,8 @@ inspired by:
 https://www.frontiersin.org/articles/10.3389/fnbot.2019.00015/full
 and
 https://openreview.net/forum?id=HyZ1CJZ_-r
-
 */
+
 #include <random>
 #include <iostream>
 #include <algorithm>
@@ -20,7 +20,15 @@ build square grid, randomly place high weights
 start and target are in the middle of the leftmost and rightmost columns.
 */
 
-const int GRID_DIM = 16; // size of GRID_DIM x GRID_DIM grid
+int epochs = 10;
+int n_ants = 10;
+const int GRID_DIM = 10; // size of GRID_DIM x GRID_DIM grid
+
+const float alpha = 1.0;
+const float beta_v = 1.5;
+const float evap = .25;
+const float Q = 100.0;
+
 const float OBST_CHANCE = 4; // chance a square will have a penalty added out of 10
 random_device dev;
 mt19937 rng(dev());
@@ -29,13 +37,6 @@ int start[2] = {GRID_DIM / 2, 0};
 int target[2] = {GRID_DIM / 2, GRID_DIM - 1};
 int grid[GRID_DIM][GRID_DIM] = {{0}};
 float pher[GRID_DIM][GRID_DIM] = {{.1}};
-
-const float alpha = 1.0;
-const float beta_v = 1.5;
-const float evap = .25;
-const float Q = 100.0;
-int n_ants = 10;
-int epochs = 10;
 
 // to be passed to pthread_create()
 struct arguments{
@@ -253,6 +254,8 @@ int main(int argc, char** argv) {
         for (int j = 0; j < n_ants; j++) {
             args[j].ant = j;
             pthread_create(&threads[j], NULL, release_ant, (void*)&(args[j]));
+        }
+        for (int j = 0; j < n_ants; j++) {
             pthread_join(threads[j], NULL);
         }
         // print all paths
@@ -268,7 +271,7 @@ int main(int argc, char** argv) {
             avg_path_len += path_len;
         }
         avg_path_len /= n_ants;
-        // cout<<"avg path len "<<avg_path_len<<endl;
+        cout<<"avg path len "<<avg_path_len<<endl;
     }
 
     /*
