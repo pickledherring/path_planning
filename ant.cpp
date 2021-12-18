@@ -26,7 +26,7 @@ const int GRID_DIM = 10; // size of GRID_DIM x GRID_DIM grid
 
 const float alpha = 1.0;
 const float beta_v = 1.5;
-const float evap = .25;
+const float evap = .5;
 const float Q = 100.0;
 
 const float OBST_CHANCE = 4; // chance a square will have a penalty added out of 10
@@ -36,7 +36,7 @@ uniform_int_distribution<mt19937::result_type> coords(0, GRID_DIM);
 int start[2] = {GRID_DIM / 2, 0};
 int target[2] = {GRID_DIM / 2, GRID_DIM - 1};
 int grid[GRID_DIM][GRID_DIM] = {{0}};
-float pher[GRID_DIM][GRID_DIM] = {{.1}};
+float pher[GRID_DIM][GRID_DIM] = {{0.001}};
 
 void penalty_add() {
     int penalty_size = 8; // about half the grid width should be enough
@@ -210,10 +210,6 @@ where 0 < evap < 1 and q is a constant, and len_k is the cost of the path ant k 
 Only update nodes along the path with second part.
 */
 int pher_update(vector<int*> const &path) {
-    for (int i = 0; i < GRID_DIM; i++)
-        for (int j = 0; j < GRID_DIM; j++)
-            pher[i][j] *= (1 - evap);
-
     int path_len = 0;
     for (int* v : path) 
         path_len += grid[v[0]][v[1]];
@@ -247,7 +243,10 @@ int main(int argc, char** argv) {
         //     cout<<i<<":  "<<path[i][0]<<", "<<path[i][1]<<"\t    ";
         // }
         // cout<<endl;
-        
+        for (int i = 0; i < GRID_DIM; i++)
+            for (int j = 0; j < GRID_DIM; j++)
+                pher[i][j] *= (1 - evap);
+
         float avg_path_len = 0;
         for (int j = 0; j < n_ants; j++) {
             int path_len = pher_update(paths[j]);
