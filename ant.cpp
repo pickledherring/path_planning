@@ -10,8 +10,8 @@ https://openreview.net/forum?id=HyZ1CJZ_-r
 #include <algorithm>
 #include <iterator>
 #include <cstring>
-#include <semaphore.h>
 #include <math.h>
+#include <Windows.h>
 using namespace std;
 
 /*
@@ -191,6 +191,9 @@ vector<int*> release_ant() {
     while (pos[0] != target[0] || pos[1] != target[1]) {
         float rand_selector = prob(rng);
         int* move_pos = choose_square(pos, rand_selector, taboo);
+        // int* new_pos = new int[2];
+        // memcpy(new_pos, move_pos, 2*sizeof(int));
+        // path.push_back(new_pos);
         taboo[move_pos[0]][move_pos[1]] = true;
         path.push_back(move_pos);
 
@@ -222,16 +225,22 @@ int pher_update(vector<int*> const &path) {
     return path_len;
 }
 
+long long get_current_time_ns() {
+    LARGE_INTEGER time, freq;
+    QueryPerformanceCounter(&time);
+    QueryPerformanceFrequency(&freq);
+    return (long long)(time.QuadPart * 1000000000 / static_cast<double>(freq.QuadPart));
+}
+
 int main(int argc, char** argv) {
     penalty_add();
     penalty_add(); // done twice for even coverage
-    // grid_print();
+    grid_print();
 
     for (auto &arr : pher)
         fill(begin(arr), end(arr), 0.1);
     
-    struct timespec start_time, end_time;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
+    long long start_time = get_current_time_ns();
 
     for (int i = 0; i < epochs; i++) {
         vector<vector<int*>> paths;
@@ -239,10 +248,12 @@ int main(int argc, char** argv) {
             paths.push_back(release_ant());
         }
         // print all paths
-        // for (int i = 0; i < path.size(); i++) {
-        //     cout<<i<<":  "<<path[i][0]<<", "<<path[i][1]<<"\t    ";
-        // }
-        // cout<<endl;
+        for (int i = 0; i < paths.size(); i++) {
+            for (int j = 0; j < paths[i].size(); j++) {
+                cout<<"path "<<i<<", step "<<j<<":  "<<paths[i][j][0]<<", "<<paths[i][j][1]<<"\t    ";
+            }
+        }
+        cout<<endl;
         for (int i = 0; i < GRID_DIM; i++)
             for (int j = 0; j < GRID_DIM; j++)
                 pher[i][j] *= (1 - evap);
@@ -253,7 +264,7 @@ int main(int argc, char** argv) {
             avg_path_len += path_len;
         }
         avg_path_len /= n_ants;
-        // cout<<"avg path len "<<avg_path_len<<endl;
+        cout<<"avg path len "<<avg_path_len<<"\n"<<endl;
     }
 
     /*
@@ -264,11 +275,10 @@ int main(int argc, char** argv) {
     not included here since I want to keep the number of iterations constant
     */
 
-   clock_gettime(CLOCK_MONOTONIC_RAW, &end_time);
-    uint64_t diff = (1000000000L * (end_time.tv_sec - start_time.tv_sec) +
-        end_time.tv_nsec - start_time.tv_nsec) / 1e6;
+    long long end_time = get_current_time_ns();
+    long long diff = end_time - start_time;
 
-    cout<<"Finished in "<<diff<<"ms!"<<endl;
+    cout<<"Finished in "<<diff / 1000000000.0<<" second!"<<endl;
 
     return 0;
 }
